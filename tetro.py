@@ -1,82 +1,234 @@
 import pygame
+from pygame_textinput import TextInput
+import requests
 from random import randint
 from copy import deepcopy
 
 
 
+GRAY = pygame.Color(70, 70, 70)
+WHITE = pygame.Color(255, 255, 255)
+
+
+
+
+
+class SurfaceObject(object):
+    def __init__(self, parent, pos):
+        self.parent = parent
+        if self.parent:
+            self.pos = (parent.pos[0] + pos[0], parent.pos[1] + pos[1])
+        else:
+            self.pos = pos
+        self.rect = None
+
+    def set_rect(self, rect):
+        self.rect = rect
+        self.pos = (self.pos[0]-self.rect.w//2, self.pos[1]-self.rect.h//2)
+        self.rect.topleft = self.pos
 
 
 
 
 
 
+class Label(SurfaceObject):
+    def __init__(self, parent, pos, text=""):
+        SurfaceObject.__init__(self, parent, pos)
+        self.color = WHITE
+        self.font = pygame.font.SysFont("menlottc", 20)
+        self.set_text(text)
+        self.set_rect(self.text_surf.get_rect())
+
+    def set_text(self, text):
+        self.text = str(text)
+        self.render_text()
+
+    def set_color(self, color):
+        self.color = color
+        self.render_text()
+
+    def set_font(self, name, size):
+        self.font = pygame.font.SysFont(name, size)
+        self.render_text()
+
+    def render_text(self):
+        self.text_surf = self.font.render(self.text, True, self.color)
+
+    def draw(self, surface):
+        surface.blit(self.text_surf, self.pos)
 
 
 
-class Menu(object):
-    def __init__(self, controller):
-        self.controller = controller
-        self.menu = pygame.image.load("images/main_menu.png")
-        self.pos = (100, 200)
-        self.button = Button(self.menu, self.pos, "images/start_button.png", (100, 140), hover_image="images/start_button_hover.png")
-
-    def connect_button(self, func):
-        self.button.connect(func)
-
-    def check_event(self, event):
-        self.button.check_event(event)
-
-    def update(self):
-        self.button.update()
-
-    def draw(self):
-        self.button.draw()
-        self.controller.window.blit(self.menu, self.pos)
 
 
 
-
-
-
-
-class Button(object):
-    def __init__(self, surface, parent_pos, image, pos, hover_image=None):
-        self.surface = surface
+class Button(SurfaceObject):
+    def __init__(self, parent, pos, image, hover_image=None):
+        SurfaceObject.__init__(self, parent, pos)
         self.image = pygame.image.load(image)
+        self.set_rect(self.image.get_rect())
         self.hovered_image = pygame.image.load(hover_image) if hover_image else None
-        self.rect = self.image.get_rect()
-        self.rect.center = (parent_pos[0] + pos[0], parent_pos[1] + pos[1])
-        self.pos = (pos[0]-(self.rect.w//2), pos[1]-(self.rect.h//2))
         self.function = None
         self.draw_image = self.image
-
-    def check_event(self,event):
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            self.on_click(event)
-        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            self.on_release(event)
-
-    def on_click(self, event):
-        if self.rect.collidepoint(event.pos):
-            self.clicked = True
-            self.function()
-
-    def on_release(self, event):
-        self.clicked = False
-
-    def is_hovered(self):
-        return self.rect.collidepoint(pygame.mouse.get_pos())
 
     def connect(self, func):
         self.function = func
 
+    def check_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self.on_click(event)
+
+    def on_click(self, event):
+        if self.rect.collidepoint(event.pos):
+            self.function()
+
+    def is_hovered(self):
+        return self.rect.collidepoint(pygame.mouse.get_pos())
+
     def update(self):
         self.draw_image = self.image
-        if self.is_hovered() and self.hovered_image:
+        if self.hovered_image and self.is_hovered():
             self.draw_image = self.hovered_image
 
-    def draw(self):
-        self.surface.blit(self.draw_image, self.pos)
+    def draw(self, surface):
+        surface.blit(self.draw_image, self.pos)
+
+
+
+
+
+
+
+class MainMenu(SurfaceObject):
+    def __init__(self, parent, pos):
+        SurfaceObject.__init__(self, parent, pos)
+        self.main_menu = pygame.image.load("main_menu.png")
+        self.set_rect(self.main_menu.get_rect())
+        self.start_button = Button(self, (100, 120), "start_button.png", hover_image="start_button_hover.png")
+        self.scores_button = Button(self, (100, 190), "scores_button.png", hover_image="scores_button_hover.png")
+
+    def connect_start_button(self, func):
+        self.start_button.connect(func)
+
+    def connect_scores_button(self, func):
+        self.scores_button.connect(func)
+
+    def check_event(self, event):
+        self.start_button.check_event(event)
+        self.scores_button.check_event(event)
+
+    def update(self):
+        self.start_button.update()
+        self.scores_button.update()
+
+    def draw(self, surface):
+        surface.blit(self.main_menu, self.pos)
+        self.start_button.draw(surface)
+        self.scores_button.draw(surface)
+
+
+
+
+
+
+class ScoresMenu(SurfaceObject):
+    def __init__(self, parent, pos):
+        SurfaceObject.__init__(self, parent, pos)
+        self.blank_score_menu = pygame.image.load("scores_menu.png")
+        self.set_rect(self.blank_score_menu.get_rect())
+        self.back_button = Button(self, (100, 270), "back_button.png", hover_image="back_button_hover.png")
+        self.score_font = pygame.font.SysFont("menlottc", 11)
+
+    def draw_scores(self, high_scores):
+        self.score_menu = self.blank_score_menu.copy()
+        if high_scores:
+            x = 18
+            y = 70
+            line_height = 17
+            for i, high_score in enumerate(high_scores):
+                pos = str(i+1)
+                name = high_score[0]
+                score = str(high_score[1])
+                dot_count = 19 - (len(pos) + len(name) + len(score))
+                space = "" if len(name) == 15 else " "
+                text = pos + " " + name + space + ("." * dot_count) + " " + score
+                text_surf = self.score_font.render(text, True, WHITE)
+                self.score_menu.blit(text_surf, (x, y))
+                y += line_height
+
+    def connect_back_button(self, func):
+        self.back_button.connect(func)
+
+    def check_event(self, event):
+        self.back_button.check_event(event)
+
+    def update(self):
+        self.back_button.update()
+
+    def draw(self, surface):
+        surface.blit(self.score_menu, self.pos)
+        self.back_button.draw(surface)
+
+
+
+
+
+
+
+class GameoverMenu(SurfaceObject):
+    def __init__(self, parent, pos):
+        SurfaceObject.__init__(self, parent, pos)
+        self.gameover_menu = pygame.image.load("gameover_menu.png")
+        self.set_rect(self.gameover_menu.get_rect())
+        self.score_label = Label(self, (130, 92), "10000")
+        self.submit_button = Button(self, (100, 230), "submit_button.png", hover_image="submit_button_hover.png")
+        self.main_menu_button = Button(self, (100, 270), "main_menu_button.png", hover_image="main_menu_button_hover.png")
+        self.name_input = TextInput(
+            text_color = WHITE,
+            font_family = "menlottc",
+            font_size = 14,
+            max_string_length = 15,
+            cursor_color = (200, 10, 10),
+            pos = (40, 178),
+            parent_pos = self.pos
+        )
+
+    def set_final_score(self, score):
+        self.score_label.set_text(score)
+
+    def connect_submit_button(self, func):
+        self.submit_button.connect(func)
+
+    def connect_main_menu_button(self, func):
+        self.main_menu_button.connect(func)
+
+    def get_name(self):
+        return self.name_input.get_text()
+
+    def clear_name(self):
+        self.name_input.clear_text()
+
+    def check_event(self, event):
+        self.submit_button.check_event(event)
+        self.main_menu_button.check_event(event)
+        self.name_input.check_event(event)
+
+    def update(self):
+        self.submit_button.update()
+        self.main_menu_button.update()
+        self.name_input.update()
+
+    def draw(self, surface):
+        surface.blit(self.gameover_menu, self.pos)
+        self.score_label.draw(surface)
+        self.name_input.draw(surface)
+        self.submit_button.draw(surface)
+        self.main_menu_button.draw(surface)
+
+
+
+
 
 
 
@@ -88,14 +240,15 @@ class Button(object):
 class TetrisController(object):
     def __init__(self):
         self.WIDTH, self.HEIGHT = 600, 700
-        self.GRAY = (70, 70, 70)
 
         self.window = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
-        self.background = pygame.image.load("images/background.png")
+        self.background = pygame.image.load("background.png")
         self.window.blit(self.background, (0, 0))
         pygame.display.set_caption('Tetro')
+        self.main_surface_object = SurfaceObject(None, (0, 0))
 
-        self.font = pygame.font.SysFont("comicsansms", 56)
+        self.font = pygame.font.SysFont("menlottc", 32)
+        self.score_font = pygame.font.SysFont("menlottc", 11)
 
         self.clock = pygame.time.Clock()
         self.fps = 30
@@ -103,22 +256,62 @@ class TetrisController(object):
         self.level = 1
         self.score = 0
         self.lines_cleared = 0
+        self.final_score = 0
 
         self.tetris_pos = (50, 50)
         self.scale = 30
         self.tetris = TetrisGame(self)
         self.game_done = False
 
-        self.main_menu = Menu(self)
-        self.main_menu.connect_button(self.start_game)
-        self.display_menu = True
+        self.menu_pos = (200, 350)
+
+        self.main_menu = MainMenu(self.main_surface_object, self.menu_pos)
+        self.main_menu.connect_start_button(self.start_game)
+        self.main_menu.connect_scores_button(self.show_scores_menu)
+        self.display_main_menu = True
+
+        self.scores_menu = ScoresMenu(self.main_surface_object, self.menu_pos)
+        self.scores_menu.connect_back_button(self.show_main_menu)
+        self.display_scores_menu = False
+
+        self.gameover_menu = GameoverMenu(self.main_surface_object, self.menu_pos)
+        self.gameover_menu.connect_submit_button(self.submit_high_score)
+        self.gameover_menu.connect_main_menu_button(self.show_main_menu)
+        self.display_gameover_menu = False
 
         self.draw_stats()
 
     def start_game(self):
-        self.display_menu = False
+        self.display_main_menu = False
         self.game_done = False
         self.draw_next_piece()
+
+    def show_scores_menu(self):
+        self.display_scores_menu = True
+        self.display_main_menu = False
+        high_scores = self.get_high_scores()
+        self.scores_menu.draw_scores(high_scores)
+
+    def show_main_menu(self):
+        self.display_main_menu = True
+        self.display_scores_menu = False
+        self.display_gameover_menu = False
+
+    def get_high_scores(self):
+        params = {"qnt": 10, "sort": True}
+        url = "http://api.ryanstella.me/tetro/high-scores"
+        response = requests.get(url, params=params)
+        high_scores = response.json()
+        return high_scores
+
+    def submit_high_score(self):
+        name = self.gameover_menu.get_name().strip()
+        if name:
+            data = {"name": name, "score": self.final_score}
+            url = "http://api.ryanstella.me/tetro/high-scores"
+            requests.post(url, data=data)
+            self.gameover_menu.clear_name()
+            self.show_main_menu()
 
     def update_score(self, clear_count):
         if clear_count:
@@ -129,8 +322,10 @@ class TetrisController(object):
             if self.tetris.time_segment == 0: self.tetris.time_segment = 1
 
     def game_over(self):
-        self.display_menu = True
+        self.gameover_menu.set_final_score(self.score)
+        self.display_gameover_menu = True
         self.game_done = True
+        self.final_score = self.score
         self.tetris.clear_grid()
         self.level = 1
         self.score = 0
@@ -139,9 +334,9 @@ class TetrisController(object):
         self.tetris.new_piece()
 
     def draw_stats(self):
-        level_text = self.font.render(str(self.level), True, self.GRAY)
-        score_text = self.font.render(str(self.score), True, self.GRAY)
-        lines_text = self.font.render(str(self.lines_cleared), True, self.GRAY)
+        level_text = self.font.render(str(self.level), True, GRAY)
+        score_text = self.font.render(str(self.score), True, GRAY)
+        lines_text = self.font.render(str(self.lines_cleared), True, GRAY)
         level_w, level_h = self.font.size(str(self.level))
         score_w, score_h = self.font.size(str(self.score))
         lines_w, lines_h = self.font.size(str(self.lines_cleared))
@@ -165,15 +360,27 @@ class TetrisController(object):
             y = -sq[1] * self.scale + yoff
             self.window.blit(next.piece_img, (x, y))
 
+    def check_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            self.tetris.key_down(event.key)
+        elif event.type == pygame.KEYUP:
+            self.tetris.key_up(event.key)
+
     def run(self):
         running = True
         while running:
 
             self.clock.tick(self.fps)
 
-            if self.display_menu:
+            if self.display_main_menu:
                 self.main_menu.update()
-                self.main_menu.draw()
+                self.main_menu.draw(self.window)
+            elif self.display_scores_menu:
+                self.scores_menu.update()
+                self.scores_menu.draw(self.window)
+            elif self.display_gameover_menu:
+                self.gameover_menu.update()
+                self.gameover_menu.draw(self.window)
             else:
                 self.tetris.update()
                 if not self.game_done:
@@ -189,12 +396,14 @@ class TetrisController(object):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN:
-                    self.tetris.key_down(event.key)
-                elif event.type == pygame.KEYUP:
-                    self.tetris.key_up(event.key)
-                else:
+                elif self.display_main_menu:
                     self.main_menu.check_event(event)
+                elif self.display_scores_menu:
+                    self.scores_menu.check_event(event)
+                elif self.display_gameover_menu:
+                    self.gameover_menu.check_event(event)
+                else:
+                    self.check_event(event)
 
 
 
@@ -202,40 +411,30 @@ class TetrisController(object):
 
 
 
-class TetrisGame(object):
+
+class TetrisGame(SurfaceObject):
     def __init__(self, controller):
         self.GRID_BG = (50, 50, 50)
         self.controller = controller
         self.gw, self.gh = 300, 600
         self.grid_surface = pygame.Surface((self.gw, self.gh))
         self.grid_surface.fill(self.GRID_BG)
-        self.grid_pos = (50, 50)
         self.scale = 30
         self.rows = 20
         self.cols = 10
-        self.grid = []
-        self.grid.append([1] * (self.cols+2))
-        for _ in range(self.rows+1):
-            self.grid.append([1] + ([0] * self.cols) + [1])
-
-        self.shapes = []
-        self.colors = []
-        self.offsets = []
+        self.init_grid()
         self.init_pieces()
         self.init_offsets()
         rand1 = randint(0, len(self.shapes)-1)
         rand2 = randint(0, len(self.shapes)-1)
-        self.piece = Piece(self, deepcopy(self.shapes[rand1]), self.piece_imgs[rand1], rand1, self.offset_indexs[rand1])
-        self.next_piece = Piece(self, deepcopy(self.shapes[rand2]), self.piece_imgs[rand2], rand2, self.offset_indexs[rand2])
+        self.piece = Piece(self, deepcopy(self.shapes[rand1]), self.piece_imgs[rand1], rand1, self.offset_indicies[rand1])
+        self.next_piece = Piece(self, deepcopy(self.shapes[rand2]), self.piece_imgs[rand2], rand2, self.offset_indicies[rand2])
 
         self.time = 0
         self.time_segment = 15
         self.time_step = 1
         self.stats_updated = False
-
         self.down_down = False
-
-        self.lines_cleared = 0
 
     def key_down(self, key):
         if key == 273 or key == 105:
@@ -256,7 +455,7 @@ class TetrisGame(object):
     def new_piece(self):
         self.piece = self.next_piece
         randi = randint(0, len(self.shapes)-1)
-        self.next_piece = Piece(self, deepcopy(self.shapes[randi]), self.piece_imgs[randi], randi, self.offset_indexs[randi])
+        self.next_piece = Piece(self, deepcopy(self.shapes[randi]), self.piece_imgs[randi], randi, self.offset_indicies[randi])
 
     def grid_intersect(self):
         for sq in self.piece.shape:
@@ -330,7 +529,6 @@ class TetrisGame(object):
         self.place_piece()
         clear_count = self.clear_lines()
         self.controller.update_score(clear_count)
-        self.new_piece()
 
     def place_piece(self):
         for sq in self.piece.shape:
@@ -357,6 +555,7 @@ class TetrisGame(object):
             self.time = 0
             if self.next_down_inter():
                 self.finish_piece()
+                self.new_piece()
                 self.stats_updated = True
                 self.down_down = False
                 if self.grid_intersect():
@@ -379,21 +578,27 @@ class TetrisGame(object):
                 if self.grid[gi][gj]:
                     self.grid_surface.blit(self.grid[gi][gj], (x, y))
 
+    def init_grid(self):
+        self.grid = []
+        self.grid.append([1] * (self.cols+2))
+        for _ in range(self.rows+1):
+            self.grid.append([1] + ([0] * self.cols) + [1])
+
     def init_offsets(self):
         self.offsets = [
             [
-                [(0, 0), (0, 0), (0, 0), (0, 0)],
-                [(0, 0), (1, 0), (0, 0), (-1, 0)],
+                [(0, 0), (0,  0), (0, 0), ( 0,  0)],
+                [(0, 0), (1,  0), (0, 0), (-1,  0)],
                 [(0, 0), (1, -1), (0, 0), (-1, -1)],
-                [(0, 0), (0, 2), (0, 0), (0, 2)],
-                [(0, 0), (1, 2), (0, 0), (-1, 2)]
+                [(0, 0), (0,  2), (0, 0), ( 0,  2)],
+                [(0, 0), (1,  2), (0, 0), (-1,  2)]
             ],
             [
-                [(0, 0), (-1, 0), (-1, 1), (0, 1)],
-                [(-1, 0), (0, 0), (1, 1), (0, 1)],
-                [(2, 0), (0, 0), (-2, 1), (0, 1)],
-                [(-1, 0), (0, 1),  (1, 0), (0, -1)],
-                [(2, 0), (0, -2), (-2, 0), (0, 2)]
+                [( 0, 0), (-1,  0), (-1, 1), (0,  1)],
+                [(-1, 0), ( 0,  0), ( 1, 1), (0,  1)],
+                [( 2, 0), ( 0,  0), (-2, 1), (0,  1)],
+                [(-1, 0), ( 0,  1), ( 1, 0), (0, -1)],
+                [( 2, 0), ( 0, -2), (-2, 0), (0,  2)]
             ],
             [
                 [(0, 0), (0, -1), (-1, -1), (-1, 0)]
@@ -401,15 +606,15 @@ class TetrisGame(object):
         ]
 
     def init_pieces(self):
-        self.offset_indexs = [0, 0, 0, 0, 0, 1, 2]
+        self.offset_indicies = [0, 0, 0, 0, 0, 1, 2]
         self.piece_imgs = [
-            pygame.image.load("pieces/piece_purple.png"),
-            pygame.image.load("pieces/piece_blue.png"),
-            pygame.image.load("pieces/piece_orange.png"),
-            pygame.image.load("pieces/piece_red.png"),
-            pygame.image.load("pieces/piece_green.png"),
-            pygame.image.load("pieces/piece_lightblue.png"),
-            pygame.image.load("pieces/piece_yellow.png"),
+            pygame.image.load("piece_purple.png"),
+            pygame.image.load("piece_blue.png"),
+            pygame.image.load("piece_orange.png"),
+            pygame.image.load("piece_red.png"),
+            pygame.image.load("piece_green.png"),
+            pygame.image.load("piece_lightblue.png"),
+            pygame.image.load("piece_yellow.png"),
         ]
         self.colors = [
             (200, 0, 0),
@@ -420,48 +625,15 @@ class TetrisGame(object):
             (200, 200, 200),
             (200, 0, 200)
         ]
-        self.shapes.append([
-            [0, 0],
-            [-1, 0],
-            [1, 0],
-            [0, 1]
-        ])
-        self.shapes.append([
-            [0, 0],
-            [-1, 0],
-            [1, 0],
-            [-1, 1]
-        ])
-        self.shapes.append([
-            [0, 0],
-            [-1, 0],
-            [1, 0],
-            [1, 1]
-        ])
-        self.shapes.append([
-            [0, 0],
-            [-1, 1],
-            [0, 1],
-            [1, 0]
-        ])
-        self.shapes.append([
-            [0, 0],
-            [-1, 0],
-            [0, 1],
-            [1, 1]
-        ])
-        self.shapes.append([
-            [0, 0],
-            [-1, 0],
-            [1, 0],
-            [2, 0]
-        ])
-        self.shapes.append([
-            [0, 0],
-            [0, 1],
-            [1, 1],
-            [1, 0]
-        ])
+        self.shapes = [
+            [[0, 0], [-1, 0], [1, 0], [ 0, 1]],
+            [[0, 0], [-1, 0], [1, 0], [-1, 1]],
+            [[0, 0], [-1, 0], [1, 0], [ 1, 1]],
+            [[0, 0], [-1, 1], [0, 1], [ 1, 0]],
+            [[0, 0], [-1, 0], [0, 1], [ 1, 1]],
+            [[0, 0], [-1, 0], [1, 0], [ 2, 0]],
+            [[0, 0], [ 0, 1], [1, 1], [ 1, 0]]
+        ]
 
 
 
