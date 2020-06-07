@@ -190,7 +190,7 @@ if __name__ == "__main__":
     clock = pygame.time.Clock()
 
     while True:
-        screen.fill((225, 0, 0))
+        screen.fill((225, 255, 255))
 
         for event in pygame.event.get():
             textinput.check_event(event)
@@ -204,14 +204,3 @@ if __name__ == "__main__":
 
         pygame.display.update()
         clock.tick(30)
-
-
-
-
-
-
-
-
-
-
-# blank_space
