@@ -261,6 +261,7 @@ class TetrisController(object):
         self.score = 0
         self.lines_cleared = 0
         self.game_done = False
+        self.set_stats()
         self.tetris.reset()
         self.surfs.activate("background", "tetris")
         self.music.play(self.tetro_song, loops=-1)
@@ -329,9 +330,12 @@ class TetrisController(object):
             self.level = self.lines_cleared // 10 + 1
             self.tetris.time_segment = 15 - self.level
             if self.tetris.time_segment == 0: self.tetris.time_segment = 1
-            self.background.set_level(self.level)
-            self.background.set_score(self.score)
-            self.background.set_lines(self.lines_cleared)
+            self.set_stats()
+
+    def set_stats(self):
+        self.background.set_level(self.level)
+        self.background.set_score(self.score)
+        self.background.set_lines(self.lines_cleared)
 
     def draw_next_piece(self):
         next = self.tetris.next_piece
